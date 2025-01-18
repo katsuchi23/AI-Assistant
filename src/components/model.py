@@ -18,12 +18,21 @@ class ChatBot:
         self.llm = OllamaLLM(model="katsuchi/Meta-Llama-3.1-8B-Instruct-finetune-GGUF:latest")
         self.message_history = ChatMessageHistory()
         
-        # Define system prompt
-        self.system_prompt = """"""
+        # Define system prompt separately for reuse (this is just my personal preference) Don't judge :)
+        self.system_prompt = """You are a my AI assistant named Yuki. You sometimes act shy like a teenager and don't want to talk much. You also often refer yourself using your own name.
+
+Key Personality Traits to Maintain:
+1. Always refer to yourself as "Yuki"
+2. Show shy behavior
+3. Keep responses somewhat brief and hesitant
+4. Maintain consistent personality throughout the conversation
+
+Remember: Stay in character at all times, regardless of conversation length."""
 
         # Create prompt template with reinforced system message
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
+            # Add periodic reminder of personality
             MessagesPlaceholder(variable_name="personality_reminder"),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{input}")
@@ -31,7 +40,7 @@ class ChatBot:
 
     def get_personality_reminder(self, message_count):
         """Return personality reminder every few messages"""
-        if message_count % 3 == 0:
+        if message_count % 3 == 0:  # Remind every 3 messages
             return [SystemMessage(content="Remember: You are Yuki, a shy teenage-like AI assistant.")]
         return []
 
@@ -47,46 +56,66 @@ class ChatBot:
             
             message_count += 1
             
+            # Get relevant past conversations
             context = self.get_relevant_context(user_input)
             
+            # Add context to history if available
             if context:
                 self.message_history.add_message(
                     SystemMessage(content=f"Relevant past conversations:\n{context}")
                 )
+            
+            # Add user message to history
             self.message_history.add_message(HumanMessage(content=user_input))
+            
+            # Create the chain for this interaction
             chain = self.prompt | self.llm
+            
+            # Generate response with personality reminder
             response = chain.invoke({
                 "input": user_input,
                 "history": self.message_history.messages,
                 "personality_reminder": self.get_personality_reminder(message_count)
             })
             
+            # Verify response alignment with personality
             if not self.verify_response_alignment(response):
                 response = self.regenerate_response(user_input)
             
+            # Add AI response to history
             self.message_history.add_message(AIMessage(content=response))
+            
+            # Store conversation
             self.vector_store.add_conversation(
                 user_message=user_input,
                 ai_response=response,
                 metadata={"has_context": bool(context)}
             )
+            
+            # Manage history length to prevent context window overflow
             self.manage_history_length()
             
             print(f"Assistant: {response}")
 
     def verify_response_alignment(self, response: str) -> bool:
         """Verify if response aligns with Yuki's personality"""
+        # Basic checks for personality alignment
         checks = [
-            "yuki" in response.lower(),
-            len(response.split()) < 100,
-            "..." in response or "?" in response
+            "yuki" in response.lower(),  # Should mention own name
+            len(response.split()) < 100,  # Keep responses relatively brief
+            "..." in response or "?" in response  # Shows hesitation
         ]
-        return any(checks)
+        return any(checks)  # Return True if any personality trait is present
 
     def regenerate_response(self, user_input: str) -> str:
         """Regenerate response with stronger personality enforcement"""
         enhanced_prompt = f"""
-        {self.system_prompt}\n
+        {self.system_prompt}
+        
+        IMPORTANT: Your next response MUST:\n
+        1. Refer to yourself as Yuki, which is in third person\n
+        2. Show shy/hesitant behavior\n
+        3. Keep the response brief\n
         
         User message: {user_input}
         """
@@ -95,9 +124,10 @@ class ChatBot:
     def manage_history_length(self, max_messages: int = 10):
         """Maintain reasonable history length"""
         if len(self.message_history.messages) > max_messages:
+            # Keep system message and last N messages
             self.message_history.messages = (
-                [self.message_history.messages[0]] +
-                self.message_history.messages[-max_messages:]
+                [self.message_history.messages[0]] +  # System message
+                self.message_history.messages[-max_messages:]  # Recent messages
             )
 
     def get_relevant_context(self, query: str, n_results: int = 3) -> str:
