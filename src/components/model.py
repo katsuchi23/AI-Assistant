@@ -1,4 +1,4 @@
-from rag import ConversationVectorStore
+from .rag import ConversationVectorStore
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
