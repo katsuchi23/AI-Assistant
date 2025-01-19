@@ -13,7 +13,13 @@ from sklearn.metrics import accuracy_score, f1_score
 import evaluate
 from tqdm.auto import tqdm
 from sklearn.model_selection import train_test_split
-from peft import PeftModel
+from peft import (
+    get_peft_model,
+    LoraConfig,
+    TaskType,
+    PeftConfig,
+    PeftModel
+)
 from transformers import AutoModelForSequenceClassification
 
 # Load dataset
@@ -56,27 +62,44 @@ tokenized_eval = eval_dataset.map(tokenize_function, batched=True)
 tokenized_train.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
 tokenized_eval.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
 
-# Load model
+# Load base model
 model = AutoModelForSequenceClassification.from_pretrained(
     model_checkpoint,
     num_labels=6,
 )
 
+# Configure LoRA
+lora_config = LoraConfig(
+    task_type=TaskType.SEQ_CLS,
+    r=16,
+    lora_alpha=32,
+    lora_dropout=0.1,
+    target_modules=["query", "value"],
+    bias="none",
+    inference_mode=False,
+)
+
+# Apply LoRA config to the model
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+
 # Training arguments
 training_args = TrainingArguments(
-    output_dir="",
+    output_dir="bert-dair-ai-emotion", 
     num_train_epochs=3,
+    gradient_accumulation_steps=16,
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
-    warmup_steps=500,
+    warmup_steps= 100,
     weight_decay=0.01,
     logging_dir='./logs',
-    logging_steps=10,
+    logging_steps=20,
     evaluation_strategy="epoch",
     save_strategy="epoch",
     load_best_model_at_end=True,
     metric_for_best_model="f1",
-    report_to=["none"],
+    push_to_hub=True,
+    hub_model_id="katsuchi/bert-dair-ai-emotion"
 )
 
 # Compute metrics function
@@ -99,22 +122,6 @@ trainer = Trainer(
 # Train the model
 trainer.train()
 
-# Save model to Hugging Face Hub (make sure to login first using HuggingFace CLI)
-trainer.push_to_hub()
-
-def emotion_classification(text):
-    base_model = AutoModelForSequenceClassification.from_pretrained("bert-base-cased", num_labels = 6)
-    model = PeftModel.from_pretrained(base_model, "katsuchi/bert-dair-ai-emotion")
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
-
-    token = tokenizer(text, return_tensors="pt")
-    with torch.no_grad():
-        output = model(token['input_ids'])
-        output.logits
-        output = torch.softmax(output.logits, dim=-1)
-
-    emotion = ['sadness','joy','love','anger','fear','surprise']
-
-    idx = torch.argmax(output, dim=-1).item()
-    classes = emotion[idx]
-    return classes
+# Save model and push to hub
+trainer.model.save_pretrained("bert-dair-ai-emotion")
+trainer.push_to_hub("katsuchi/bert-dair-ai-emotion")
