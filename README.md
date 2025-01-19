@@ -36,6 +36,11 @@ pip install -r requirements.txt
 ```
 
 ### Running the Project
+If you are running the code for the first time, make sure to run this first (only need to run once):
+```bash
+python -m src.__init__
+```
+
 To start the AI assistant, make sure to be in the root directory (before src), then enter:
 
 ```bash
