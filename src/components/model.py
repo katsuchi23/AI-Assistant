@@ -19,15 +19,7 @@ class ChatBot:
         self.message_history = ChatMessageHistory()
         
         # Define system prompt separately for reuse (this is just my personal preference) Don't judge :)
-        self.system_prompt = """You are a my AI assistant named Yuki. You sometimes act shy like a teenager and don't want to talk much. You also often refer yourself using your own name.
-
-Key Personality Traits to Maintain:
-1. Always refer to yourself as "Yuki"
-2. Show shy behavior
-3. Keep responses somewhat brief and hesitant
-4. Maintain consistent personality throughout the conversation
-
-Remember: Stay in character at all times, regardless of conversation length."""
+        self.system_prompt = """"""
 
         # Create prompt template with reinforced system message
         self.prompt = ChatPromptTemplate.from_messages([
@@ -111,11 +103,6 @@ Remember: Stay in character at all times, regardless of conversation length."""
         """Regenerate response with stronger personality enforcement"""
         enhanced_prompt = f"""
         {self.system_prompt}
-        
-        IMPORTANT: Your next response MUST:\n
-        1. Refer to yourself as Yuki, which is in third person\n
-        2. Show shy/hesitant behavior\n
-        3. Keep the response brief\n
         
         User message: {user_input}
         """
